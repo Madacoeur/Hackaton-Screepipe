@@ -1,0 +1,4 @@
+.env
+training_bot/browser_profile/
+training_bot/scenarios_log.jsonl
+__pycache__/
