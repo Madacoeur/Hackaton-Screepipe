@@ -1,0 +1,92 @@
+{
+  "cahier": {
+    "fichier": "cahier-des-charges-site-vitrine.pdf",
+    "executions": 9,
+    "etapes": [
+      "ouvrir_boite_reception",
+      "ouvrir_mail",
+      "ouvrir_explorateur",
+      "selectionner_fichier",
+      "glisser_fichier_dans_gmail",
+      "revenir_dans_gmail",
+      "verifier_piece_jointe",
+      "rediger_reponse",
+      "envoyer"
+    ]
+  },
+  "contrat": {
+    "fichier": "contrat-prestation-boulangeriemax.pdf",
+    "executions": 9,
+    "etapes": [
+      "ouvrir_boite_reception",
+      "ouvrir_mail",
+      "ouvrir_explorateur",
+      "selectionner_fichier",
+      "glisser_fichier_dans_gmail",
+      "revenir_dans_gmail",
+      "verifier_piece_jointe",
+      "rediger_reponse",
+      "envoyer"
+    ]
+  },
+  "devis": {
+    "fichier": "devis-studio-nova.pdf",
+    "executions": 9,
+    "etapes": [
+      "ouvrir_boite_reception",
+      "ouvrir_mail",
+      "ouvrir_explorateur",
+      "selectionner_fichier",
+      "glisser_fichier_dans_gmail",
+      "revenir_dans_gmail",
+      "verifier_piece_jointe",
+      "rediger_reponse",
+      "envoyer"
+    ]
+  },
+  "facture": {
+    "fichier": "facture-octobre-2026.pdf",
+    "executions": 9,
+    "etapes": [
+      "ouvrir_boite_reception",
+      "ouvrir_mail",
+      "ouvrir_explorateur",
+      "selectionner_fichier",
+      "glisser_fichier_dans_gmail",
+      "revenir_dans_gmail",
+      "verifier_piece_jointe",
+      "rediger_reponse",
+      "envoyer"
+    ]
+  },
+  "maquette": {
+    "fichier": "maquette-accueil-v2.pdf",
+    "executions": 9,
+    "etapes": [
+      "ouvrir_boite_reception",
+      "ouvrir_mail",
+      "ouvrir_explorateur",
+      "selectionner_fichier",
+      "glisser_fichier_dans_gmail",
+      "revenir_dans_gmail",
+      "verifier_piece_jointe",
+      "rediger_reponse",
+      "envoyer"
+    ]
+  },
+  "planning": {
+    "fichier": "planning-projet-novembre.pdf",
+    "executions": 8,
+    "etapes": [
+      "ouvrir_boite_reception",
+      "ouvrir_mail",
+      "ouvrir_explorateur",
+      "selectionner_fichier",
+      "glisser_fichier_dans_gmail",
+      "revenir_dans_gmail",
+      "verifier_piece_jointe",
+      "rediger_reponse",
+      "envoyer"
+    ]
+  }
+}

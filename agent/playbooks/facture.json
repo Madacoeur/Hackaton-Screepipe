@@ -1,0 +1,79 @@
+{
+  "scenario": "facture",
+  "declencheur": {
+    "type": "mail_entrant",
+    "mots_cles": [
+      "facture",
+      "octobre",
+      "compta",
+      "comptable"
+    ],
+    "sujets_observes": [
+      "Facture octobre",
+      "Pièce manquante - compta"
+    ]
+  },
+  "variables": {
+    "expediteur": "prénom de l'expéditeur du mail",
+    "fichier": "facture-octobre-2026.pdf",
+    "dossier": "C:\\Users\\table-en4\\Documents\\Freelance-Demo"
+  },
+  "etapes": [
+    {
+      "ordre": 1,
+      "action": "ouvrir_boite_reception",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 2,
+      "action": "ouvrir_mail",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 3,
+      "action": "ouvrir_explorateur",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 4,
+      "action": "selectionner_fichier",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 5,
+      "action": "glisser_fichier_dans_gmail",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 6,
+      "action": "revenir_dans_gmail",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 7,
+      "action": "verifier_piece_jointe",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 8,
+      "action": "rediger_reponse",
+      "vu_dans": "11% des exécutions"
+    },
+    {
+      "ordre": 9,
+      "action": "envoyer",
+      "vu_dans": "100% des exécutions"
+    }
+  ],
+  "exemples_de_reponse": [
+    "Salut Karim,\n\nDésolé pour le délai, la semaine a été chargée. Voici la facture d'octobre, en pièce jointe.\nJe reste dispo si besoin de modifications.\nN'hésite pas si tu as des questions.\n\nA plus,\nTable En",
+    "Hey Karim,\n\nPas de souci, je m'en occupe tout de suite. Voici la facture d'octobre, en pièce jointe.\nTiens-moi au courant après lecture.\nN'hésite pas si tu as des questions.\n\nBonne journée,\nTable En",
+    "Coucou Karim,\n\nMerci pour ton message. Je t'envoie la facture d'octobre ci-joint.\nJe reste dispo si besoin de modifications.\nSi tu veux qu'on en parle de vive voix, on peut s'appeler cette semaine.\n\nA bientôt,\nTable En"
+  ],
+  "observations": {
+    "executions_analysees": 9,
+    "sequence_identique": "8/9",
+    "premiere": "2026-10-17T02:07:58",
+    "derniere": "2026-10-17T03:41:42"
+  }
+}

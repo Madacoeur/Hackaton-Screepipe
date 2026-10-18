@@ -19,13 +19,15 @@ from datetime import datetime
 import pyautogui  # importé en premier : rend le process DPI-aware (coordonnées physiques)
 from pywinauto import Desktop
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import (ElementClickInterceptedException, StaleElementReferenceException,
+                                        TimeoutException)
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from config import BROWSER_PATH, DEBUG_PORT, FILES_DIR, LOG_FILE, PROFILE_DIR, SENDER_EMAIL, SENDER_NAME, SIGNATURE
+from config import (BROWSER_PATH, DEBUG_PORT, DEMO_EMAIL, FILES_DIR, LOG_FILE, PROFILE_DIR, SENDER_EMAIL, SENDER_NAME,
+                    SIGNATURE)
 from phrases import build_reply
 from scenarios import SCENARIOS, match_scenario
 
@@ -75,21 +77,47 @@ def layout_windows(driver):
 
 
 def visible(driver, xpath):
-    return [e for e in driver.find_elements(By.XPATH, xpath) if e.is_displayed()]
+    out = []
+    for e in driver.find_elements(By.XPATH, xpath):
+        try:
+            if e.is_displayed():
+                out.append(e)
+        except StaleElementReferenceException:  # Gmail a redessiné l'élément entre-temps
+            pass
+    return out
 
 
 def wait_visible(driver, xpath, timeout=20):
     return WebDriverWait(driver, timeout).until(lambda d: visible(d, xpath) or False)
 
 
+def brave_window():
+    # le titre bouge (compteur de non lus) : on cherche juste une fenêtre Brave sur Gmail
+    for win in Desktop(backend="win32").windows(class_name="Chrome_WidgetWin_1", title_re=".*Gmail.*Brave.*"):
+        return win
+    # onglet actif sur autre chose que Gmail (ex. un document affiché par le bot de contexte)
+    for win in Desktop(backend="win32").windows(class_name="Chrome_WidgetWin_1", title_re=".* Brave$"):
+        return win
+    raise RuntimeError("fenêtre Brave introuvable")
+
+
+def focus_browser():
+    """Ramène Brave au premier plan (si l'utilisateur a cliqué ailleurs ou l'a réduit)."""
+    hwnd = brave_window().handle
+    ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+    pyautogui.press("alt")  # autorise SetForegroundWindow depuis un process en arrière-plan
+    ctypes.windll.user32.SetForegroundWindow(hwnd)
+    time.sleep(0.5)
+
+
 def viewport_rect(driver):
     """Rectangle écran de la zone de page, lu via Windows : Brave fausse window.screenX/outerHeight
     côté JS (anti-fingerprinting), on ne peut donc pas s'y fier."""
-    title = re.escape(driver.title)
-    for win in Desktop(backend="win32").windows(class_name="Chrome_WidgetWin_1", title_re=f"^{title}.*"):
-        for child in win.descendants(class_name="Chrome_RenderWidgetHostHWND"):
+    for _ in range(2):
+        for child in brave_window().descendants(class_name="Chrome_RenderWidgetHostHWND"):
             if child.is_visible():
                 return child.rectangle()
+        focus_browser()
     raise RuntimeError("zone de page Brave introuvable")
 
 
@@ -107,7 +135,7 @@ ROW = "//tr[contains(@class,'zA')]"
 
 
 def open_inbox(driver):
-    if not driver.current_url.startswith(INBOX_URL):
+    if driver.current_url != INBOX_URL:  # un mail ouvert = #inbox/<id>
         driver.get(INBOX_URL)
     wait_visible(driver, ROW, 60)
 
@@ -117,10 +145,13 @@ def wait_for_new_mail(driver, subject=None, timeout=180):
     deadline = time.time() + timeout
     while time.time() < deadline:
         open_inbox(driver)
-        row = visible(driver, ROW)[0]
-        unread = "zE" in row.get_attribute("class")
-        if unread and (subject is None or subject.split(":")[-1].strip() in row.text):
-            return row
+        try:
+            row = visible(driver, ROW)[0]
+            unread = "zE" in row.get_attribute("class")
+            if unread and (subject is None or subject.split(":")[-1].strip() in row.text):
+                return row
+        except StaleElementReferenceException:  # Gmail a redessiné la liste entre-temps
+            continue
         time.sleep(8)
         driver.refresh()
     raise TimeoutException(f"mail '{subject}' pas arrivé après {timeout}s")
@@ -128,6 +159,9 @@ def wait_for_new_mail(driver, subject=None, timeout=180):
 
 def pick_row(driver):
     rows = visible(driver, ROW)
+    unread = [r for r in rows if "zE" in r.get_attribute("class")]
+    if unread:  # le plus récent non lu = la demande qu'on vient de recevoir
+        return unread[0]
     if SENDER_EMAIL:
         for row in rows:
             if row.find_elements(By.XPATH, f".//span[@email='{SENDER_EMAIL}']"):
@@ -139,10 +173,24 @@ def read_open_mail(driver):
     wait_visible(driver, "//h2[contains(@class,'hP')]")
     time.sleep(1.5)
     subject = visible(driver, "//h2[contains(@class,'hP')]")[0].text
-    bodies = visible(driver, "//div[contains(@class,'a3s')]")
-    body = bodies[-1].text if bodies else ""
-    senders = visible(driver, "//span[contains(@class,'gD')]")
-    name = (senders[-1].get_attribute("name") or senders[-1].text) if senders else ""
+    # dans un fil, on lit le dernier message REÇU (pas notre propre réponse) ; on le déplie au besoin
+    mine = (DEMO_EMAIL or "").lower()
+    received = [s for s in visible(driver, "//span[contains(@class,'gD')]")
+                if (s.get_attribute("email") or "").lower() != mine]
+    body, name = "", ""
+    if received:
+        sender = received[-1]
+        name = sender.get_attribute("name") or sender.text
+        msg = sender.find_elements(By.XPATH, "./ancestor::div[contains(@class,'adn')][1]")
+        if msg and not [b for b in msg[0].find_elements(By.CSS_SELECTOR, "div.a3s") if b.is_displayed()]:
+            sender.click()  # message replié : on l'ouvre
+            time.sleep(1.5)
+        if msg:
+            texts = [b.text for b in msg[0].find_elements(By.CSS_SELECTOR, "div.a3s") if b.is_displayed()]
+            body = texts[0] if texts else ""
+    if not body:
+        bodies = visible(driver, "//div[contains(@class,'a3s')]")
+        body = bodies[-1].text if bodies else ""
     if name.lower() in ("", "moi", "me"):  # mail envoyé depuis le compte démo lui-même
         name = SENDER_NAME
     return subject, body, name.split()[0]
@@ -151,9 +199,24 @@ def read_open_mail(driver):
 def click_reply(driver):
     xp = ("//span[@role='link' and (normalize-space()='Répondre' or normalize-space()='Reply')]"
           " | //*[@role='button' and (@aria-label='Répondre' or @aria-label='Reply')]")
-    btn = wait_visible(driver, xp)[-1]
+    box_xp = "//div[@contenteditable='true' and @role='textbox']"
+    try:
+        btn = wait_visible(driver, xp, timeout=6)[-1]
+    except TimeoutException:
+        # un brouillon est déjà ouvert dans ce fil : on le reprend et on efface son texte
+        box = wait_visible(driver, box_xp)[-1]
+        box.click()
+        box.send_keys(Keys.CONTROL, "a")
+        box.send_keys(Keys.DELETE)
+        return box
+    # au milieu de l'écran : le bandeau "notifications" de Gmail peut couvrir le bas de page
+    driver.execute_script("arguments[0].scrollIntoView({block: 'center'})", btn)
+    time.sleep(0.4)
     pyautogui.moveTo(*screen_center(driver, btn), duration=0.6)
-    btn.click()
+    try:
+        btn.click()
+    except ElementClickInterceptedException:
+        driver.execute_script("arguments[0].click()", btn)
     return wait_visible(driver, "//div[@contenteditable='true' and @role='textbox']")[-1]
 
 
@@ -171,7 +234,7 @@ def open_explorer_on(path):
         old.close()
     subprocess.Popen(["explorer", f"/select,{path}"])
     win = Desktop(backend="uia").window(**criteria, found_index=0)
-    win.wait("visible", timeout=15)
+    win.wait("visible", timeout=45)  # l'Explorateur peut être lent quand la machine est chargée
     sw, sh = pyautogui.size()
     hwnd = win.wrapper_object().handle
     ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
@@ -205,6 +268,7 @@ def attachment_present(driver, filename):
 # ---------------------------------------------------------------- main
 
 def process_latest(driver, send=True):
+    focus_browser()
     layout_windows(driver)
     open_inbox(driver)
     row = pick_row(driver)

@@ -1,0 +1,79 @@
+{
+  "scenario": "maquette",
+  "declencheur": {
+    "type": "mail_entrant",
+    "mots_cles": [
+      "maquette",
+      "design",
+      "mockup",
+      "accueil"
+    ],
+    "sujets_observes": [
+      "Maquette v2",
+      "Re: design accueil"
+    ]
+  },
+  "variables": {
+    "expediteur": "prénom de l'expéditeur du mail",
+    "fichier": "maquette-accueil-v2.pdf",
+    "dossier": "C:\\Users\\table-en4\\Documents\\Freelance-Demo"
+  },
+  "etapes": [
+    {
+      "ordre": 1,
+      "action": "ouvrir_boite_reception",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 2,
+      "action": "ouvrir_mail",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 3,
+      "action": "ouvrir_explorateur",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 4,
+      "action": "selectionner_fichier",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 5,
+      "action": "glisser_fichier_dans_gmail",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 6,
+      "action": "revenir_dans_gmail",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 7,
+      "action": "verifier_piece_jointe",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 8,
+      "action": "rediger_reponse",
+      "vu_dans": "11% des exécutions"
+    },
+    {
+      "ordre": 9,
+      "action": "envoyer",
+      "vu_dans": "100% des exécutions"
+    }
+  ],
+  "exemples_de_reponse": [
+    "Bonjour Karim,\n\nDésolé pour le délai, la semaine a été chargée. Voici la maquette de la page d'accueil, en pièce jointe.\nNormalement tout y est, mais dis-moi s'il manque un élément.\n\nBelle journée,\nTable En",
+    "Hello Karim,\n\nOui bien sûr. Je t'envoie la maquette de la page d'accueil ci-joint.\nDis-moi si quelque chose ne va pas.\n\nA plus,\nTable En",
+    "Coucou Karim,\n\nBien reçu, merci ! Tu trouveras la maquette de la page d'accueil en pièce jointe.\nTiens-moi au courant après lecture.\nNormalement tout y est, mais dis-moi s'il manque un élément.\n\nBelle journée,\nTable En"
+  ],
+  "observations": {
+    "executions_analysees": 9,
+    "sequence_identique": "8/9",
+    "premiere": "2026-10-17T01:51:00",
+    "derniere": "2026-10-17T03:28:49"
+  }
+}

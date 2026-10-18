@@ -1,0 +1,79 @@
+{
+  "scenario": "cahier",
+  "declencheur": {
+    "type": "mail_entrant",
+    "mots_cles": [
+      "cahier des charges",
+      "specs",
+      "spécifications",
+      "fonctionnalités"
+    ],
+    "sujets_observes": [
+      "Cahier des charges",
+      "Specs du site"
+    ]
+  },
+  "variables": {
+    "expediteur": "prénom de l'expéditeur du mail",
+    "fichier": "cahier-des-charges-site-vitrine.pdf",
+    "dossier": "C:\\Users\\table-en4\\Documents\\Freelance-Demo"
+  },
+  "etapes": [
+    {
+      "ordre": 1,
+      "action": "ouvrir_boite_reception",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 2,
+      "action": "ouvrir_mail",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 3,
+      "action": "ouvrir_explorateur",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 4,
+      "action": "selectionner_fichier",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 5,
+      "action": "glisser_fichier_dans_gmail",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 6,
+      "action": "revenir_dans_gmail",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 7,
+      "action": "verifier_piece_jointe",
+      "vu_dans": "78% des exécutions"
+    },
+    {
+      "ordre": 8,
+      "action": "rediger_reponse",
+      "vu_dans": "22% des exécutions"
+    },
+    {
+      "ordre": 9,
+      "action": "envoyer",
+      "vu_dans": "100% des exécutions"
+    }
+  ],
+  "exemples_de_reponse": [
+    "Salut Karim,\n\nMerci de m'avoir relancé. Voici le cahier des charges, en pièce jointe.\nN'hésite pas si tu as des questions.\n\nBelle journée,\nTable En",
+    "Coucou Karim,\n\nPas de souci, je m'en occupe tout de suite. Je te mets le cahier des charges en PJ.\nSi tu veux qu'on en parle de vive voix, on peut s'appeler cette semaine.\n\nBelle journée,\nTable En",
+    "Salut Karim,\n\nBien reçu, merci ! Tu trouveras le cahier des charges en pièce jointe.\nC'est bien la dernière version.\nSi tu veux qu'on en parle de vive voix, on peut s'appeler cette semaine.\n\nA bientôt,\nTable En"
+  ],
+  "observations": {
+    "executions_analysees": 9,
+    "sequence_identique": "5/9",
+    "premiere": "2026-10-17T02:01:40",
+    "derniere": "2026-10-17T03:50:18"
+  }
+}

@@ -1,0 +1,25 @@
+export type Reason = [string, string];
+export type Fact = { topic: string; value: string; quote: string; frame_id: number; timestamp: string; app: string; window: string };
+export type Frame = { frame_id: number; timestamp: string; app: string; window: string; label: string };
+export type Entry = {
+  id: string;
+  time: string;
+  mode?: string;
+  scenario?: string;
+  subject?: string;
+  sender?: string;
+  body?: string;
+  preview?: string;
+  file?: string;
+  steps?: string[];
+  reply?: string | null;
+  status: string;
+  error?: string | null;
+  score?: number;
+  reasons?: Reason[];
+  sensitive?: boolean;
+  evidence?: { frames: Frame[]; observations: number; unit?: string; memory: { id: number; text: string } | null; error?: string };
+  context?: { asked: string[]; facts: Fact[]; missing: string[] } | null;
+  final_text?: string;
+  decided_at?: string;
+};

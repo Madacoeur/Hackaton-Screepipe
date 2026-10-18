@@ -1,0 +1,78 @@
+{
+  "scenario": "contrat",
+  "declencheur": {
+    "type": "mail_entrant",
+    "mots_cles": [
+      "contrat",
+      "signature",
+      "prestation"
+    ],
+    "sujets_observes": [
+      "Contrat BoulangerieMax",
+      "Re: signature contrat"
+    ]
+  },
+  "variables": {
+    "expediteur": "prénom de l'expéditeur du mail",
+    "fichier": "contrat-prestation-boulangeriemax.pdf",
+    "dossier": "C:\\Users\\table-en4\\Documents\\Freelance-Demo"
+  },
+  "etapes": [
+    {
+      "ordre": 1,
+      "action": "ouvrir_boite_reception",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 2,
+      "action": "ouvrir_mail",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 3,
+      "action": "ouvrir_explorateur",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 4,
+      "action": "selectionner_fichier",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 5,
+      "action": "glisser_fichier_dans_gmail",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 6,
+      "action": "revenir_dans_gmail",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 7,
+      "action": "verifier_piece_jointe",
+      "vu_dans": "89% des exécutions"
+    },
+    {
+      "ordre": 8,
+      "action": "rediger_reponse",
+      "vu_dans": "11% des exécutions"
+    },
+    {
+      "ordre": 9,
+      "action": "envoyer",
+      "vu_dans": "100% des exécutions"
+    }
+  ],
+  "exemples_de_reponse": [
+    "Bonjour Karim,\n\nMerci pour ton message. Voici le contrat de prestation, en pièce jointe.\nTiens-moi au courant après lecture.\n\nBonne fin de journée,\nTable En",
+    "Hey Karim,\n\nMerci de m'avoir relancé. Tu trouveras le contrat de prestation en pièce jointe.\nNormalement tout y est, mais dis-moi s'il manque un élément.\n\nA bientôt,\nTable En",
+    "Coucou Karim,\n\nPas de souci, je m'en occupe tout de suite. Tu trouveras le contrat de prestation en pièce jointe.\nTiens-moi au courant après lecture.\n\nBonne soirée,\nTable En"
+  ],
+  "observations": {
+    "executions_analysees": 9,
+    "sequence_identique": "7/9",
+    "premiere": "2026-10-17T01:52:48",
+    "derniere": "2026-10-17T03:46:06"
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "scenario": "planning",
+  "declencheur": {
+    "type": "mail_entrant",
+    "mots_cles": [
+      "planning",
+      "échéances",
+      "calendrier",
+      "dates"
+    ],
+    "sujets_observes": [
+      "Dates de livraison",
+      "Planning projet"
+    ]
+  },
+  "variables": {
+    "expediteur": "prénom de l'expéditeur du mail",
+    "fichier": "planning-projet-novembre.pdf",
+    "dossier": "C:\\Users\\table-en4\\Documents\\Freelance-Demo"
+  },
+  "etapes": [
+    {
+      "ordre": 1,
+      "action": "ouvrir_boite_reception",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 2,
+      "action": "ouvrir_mail",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 3,
+      "action": "ouvrir_explorateur",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 4,
+      "action": "selectionner_fichier",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 5,
+      "action": "glisser_fichier_dans_gmail",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 6,
+      "action": "revenir_dans_gmail",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 7,
+      "action": "verifier_piece_jointe",
+      "vu_dans": "100% des exécutions"
+    },
+    {
+      "ordre": 8,
+      "action": "rediger_reponse",
+      "vu_dans": "25% des exécutions"
+    },
+    {
+      "ordre": 9,
+      "action": "envoyer",
+      "vu_dans": "100% des exécutions"
+    }
+  ],
+  "exemples_de_reponse": [
+    "Bonjour Karim,\n\nBien reçu, merci ! Je te mets le planning du projet en PJ.\nN'hésite pas si tu as des questions.\nJe reste dispo si besoin de modifications.\n\nBonne soirée,\nTable En",
+    "Salut Karim,\n\nMerci de m'avoir relancé. Je te mets le planning du projet en PJ.\nN'hésite pas si tu as des questions.\n\nBelle journée,\nTable En",
+    "Salut Karim,\n\nOui bien sûr. Je t'envoie le planning du projet ci-joint.\nTiens-moi au courant après lecture.\nN'hésite pas si tu as des questions.\n\nBonne fin de journée,\nTable En"
+  ],
+  "observations": {
+    "executions_analysees": 8,
+    "sequence_identique": "6/8",
+    "premiere": "2026-10-17T02:10:28",
+    "derniere": "2026-10-17T03:43:44"
+  }
+}

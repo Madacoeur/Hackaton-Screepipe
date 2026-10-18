@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #efeeec;
+  --card: #ffffff;
+  --soft: #f4f3f1;
+  --ink: #111212;
+  --body: #3b3c3c;
+  --muted: #6a6a6a;
+  --line: #e2e0dc;
+  --mint: #b2f6e3;
+  --blush: #fecacc;
+  --sky: #cfe0ff;
+  --peach: #ffd9b3;
+  --clay: #cb7b3a;
+  --coral: #ff6b5e;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-card: var(--card);
+  --color-soft: var(--soft);
+  --color-ink: var(--ink);
+  --color-body: var(--body);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-mint: var(--mint);
+  --color-blush: var(--blush);
+  --color-sky: var(--sky);
+  --color-peach: var(--peach);
+  --color-clay: var(--clay);
+  --color-coral: var(--coral);
+  --font-sans: var(--font-figtree);
+  --font-mono: var(--font-dm-mono);
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-figtree), system-ui, sans-serif;
+}
+
+/* Animations de la maquette : apparition en cascade, titre mot à mot, jauge, voyant REC */
+@keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes wordup { from { transform: translateY(105%); } to { transform: none; } }
+@keyframes fill { from { width: 0; } }
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 107, 94, 0.55); }
+  70% { box-shadow: 0 0 0 10px rgba(255, 107, 94, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 107, 94, 0); }
+}
+@keyframes wobble { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-8deg); } 50% { transform: rotate(6deg); } 75% { transform: rotate(-3deg); } }
+
+.rv { animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.d1 { animation-delay: 0.1s; }
+.d2 { animation-delay: 0.2s; }
+.d3 { animation-delay: 0.3s; }
+.word { display: inline-block; overflow: hidden; vertical-align: bottom; }
+.word > span { display: inline-block; animation: wordup 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.bar { animation: fill 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) 0.4s both; }
+.rec { animation: pulse 1.8s infinite; }
+.wob { animation: wobble 1s ease 0.6s both; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
