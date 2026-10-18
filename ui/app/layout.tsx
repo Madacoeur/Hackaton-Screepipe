@@ -7,12 +7,12 @@ const dmMono = DM_Mono({ variable: "--font-dm-mono", subsets: ["latin"], weight:
 
 export const metadata: Metadata = {
   title: "Déjà-vu Mail",
-  description: "Agent mail qui rejoue les workflows appris par screenpipe, avec preuves et confiance",
+  description: "Mail agent that replays the workflows screenpipe learned from you, with proof and confidence",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="fr">
+    <html lang="en">
       <body className={`${figtree.variable} ${dmMono.variable} antialiased`}>{children}</body>
     </html>
   );

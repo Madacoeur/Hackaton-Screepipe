@@ -9,6 +9,8 @@ __pycache__/
 agent/agent_log.jsonl
 agent/status.json
 agent/config.json
+agent/last_run.json
+agent/run.lock
 
 # app Next.js
 ui/node_modules/

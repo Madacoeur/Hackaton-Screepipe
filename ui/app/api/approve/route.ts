@@ -6,7 +6,7 @@ import { ROOT, run } from "@/lib/server";
 /** Validation humaine : envoie le brouillon (texte éventuellement modifié) ou le rejette. */
 export async function POST(req: Request) {
   const { id, text, reject } = await req.json();
-  if (typeof id !== "string" || !/^[\w-]+$/.test(id)) return new Response("id invalide", { status: 400 });
+  if (typeof id !== "string" || !/^[\w-]+$/.test(id)) return new Response("invalid id", { status: 400 });
   const args = [path.join(ROOT, "agent", "approve_draft.py"), id];
   if (reject) args.push("--reject");
   else if (typeof text === "string") {

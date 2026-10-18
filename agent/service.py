@@ -32,10 +32,10 @@ def log(msg):
 
 def run_once():
     python = Path(sys.executable).with_name("python.exe")  # même interpréteur que pythonw, mais sans console grâce au flag
-    r = subprocess.run([str(python), str(ROOT / "agent" / "run_agent.py"), "--max", "3"], cwd=ROOT,
+    r = subprocess.run([str(python), str(ROOT / "agent" / "process_now.py"), "--max", "3"], cwd=ROOT,
                        capture_output=True, text=True, encoding="utf-8", errors="replace",
                        env={**__import__("os").environ, "PYTHONIOENCODING": "utf-8"}, creationflags=NO_WINDOW)
-    lines = [l for l in (r.stdout + r.stderr).splitlines() if "[agent]" in l or "Error" in l]
+    lines = [l for l in (r.stdout + r.stderr).splitlines() if "[agent]" in l or "[process]" in l or "Error" in l]
     log(" | ".join(lines[-4:]) or f"terminé (code {r.returncode})")
 
 

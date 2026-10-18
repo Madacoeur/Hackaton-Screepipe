@@ -31,6 +31,11 @@ DAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
 AGENDA_WORDS = ["réunion", "reunion", "rdv", "rendez-vous", "heure", "quand", "dispo", "agenda", "planning"] + DAYS
 
 
+# libellés anglais des sujets, pour l'interface
+TOPIC_EN = {"prix": "price", "facture": "invoice", "livraison": "delivery date", "bug": "bug details",
+            "dispo": "availability", "jour": "day", "reunion": "meeting"}
+
+
 def topics_of(text):
     t = text.lower()
     return [k for k, words in TOPICS.items() if any(w in t for w in words)]

@@ -7,9 +7,18 @@ const AUTO_THRESHOLD = 80;
 
 type Workflow = { id: string; title: string };
 
+// les statuts restent en français dans le journal de l'agent : on ne traduit qu'à l'affichage
+const STATUS_EN: Record<string, string> = {
+  "brouillon": "draft ready", "envoyé": "sent", "à vérifier": "to check", "erreur": "error", "rejeté": "rejected",
+};
+
+// sujets demandés dans un mail (clés de agent/context.py)
+const TOPIC_EN: Record<string, string> = {
+  prix: "a price", facture: "an invoice", livraison: "a delivery date", bug: "bug details", dispo: "your availability",
+};
+
 function statusLabel(e: Entry) {
-  if (e.status === "brouillon") return "brouillon prêt";
-  return e.status;
+  return STATUS_EN[e.status] ?? e.status;
 }
 
 function isReview(e: Entry) {
@@ -45,7 +54,7 @@ function Crop({ frame, w, h, scale, focus, className = "" }: {
 
 function fmtTime(iso?: string) {
   if (!iso) return "";
-  return new Date(iso).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 export default function Home() {
@@ -85,14 +94,16 @@ export default function Home() {
   async function switchMode(m: string) {
     setMode(m);
     await fetch("/api/mode", { method: "POST", body: JSON.stringify({ mode: m }) });
-    setToast(m === "auto" ? `Auto : j'envoie seul quand je suis sûr à ${AUTO_THRESHOLD}/100` : "Je prépare, tu valides");
+    setToast(m === "auto" ? `Auto: I send on my own when I'm ${AUTO_THRESHOLD}/100 sure` : "I prepare, you approve");
   }
 
   async function runNow() {
     setRunning(true);
-    const r = await fetch("/api/run", { method: "POST" });
+    setToast("Here we go: Brave opens and the mouse will move, hands off");
+    const d = await fetch("/api/run", { method: "POST" }).then((r) => r.json()).catch(() => null);
     setRunning(false);
-    setToast(r.ok ? "C'est parti : la souris va bouger quelques secondes" : "Impossible de lancer screenpipe");
+    await load();
+    setToast(d ? (d.ok ? d.message : `Failed: ${d.message}`) : "Couldn't start the run");
   }
 
   // brouillons prêts à partir : ni sensibles, ni en attente d'une info manquante
@@ -100,7 +111,7 @@ export default function Home() {
   const [sending, setSending] = useState<string | null>(null);
 
   async function sendAll() {
-    if (!ready.length || !window.confirm(`Envoyer les ${ready.length} réponses prêtes depuis Gmail ?`)) return;
+    if (!ready.length || !window.confirm(`Send the ${ready.length} ready repl${ready.length > 1 ? "ies" : "y"} from Gmail?`)) return;
     let ok = 0;
     for (const [i, e] of ready.entries()) {
       setSending(`${i + 1}/${ready.length}`);
@@ -109,7 +120,7 @@ export default function Home() {
       await load();
     }
     setSending(null);
-    setToast(`${ok} réponse${ok > 1 ? "s" : ""} envoyée${ok > 1 ? "s" : ""} sur ${ready.length}`);
+    setToast(`${ok} of ${ready.length} repl${ready.length > 1 ? "ies" : "y"} sent`);
   }
 
   return (
@@ -126,7 +137,7 @@ export default function Home() {
               : <Draft key={entry.id} entry={entry} onDone={(m) => { setToast(m); load(); }} />
           ) : (
             <section className="rv rounded-[28px] bg-card p-10 text-center text-muted">
-              Rien à traiter pour l&apos;instant.
+              Nothing to handle right now.
             </section>
           )}
         </main>
@@ -153,11 +164,11 @@ function Header({ entry, drafts, mode, running, workflow, onMode, onRun, ready, 
         <span className="text-2xl font-semibold tracking-[-0.04em]">déjà-vu</span>
         {workflow && (
           <span className="hidden max-w-sm truncate text-sm text-white/60 lg:block" title={workflow.title}>
-            appris par screenpipe : {workflow.title}
+            learned by screenpipe: {workflow.title}
           </span>
         )}
-        <div role="group" aria-label="Mode de l'agent" className="ml-auto flex rounded-full bg-white/12 p-1">
-          {[["verification", "Je valide"], ["auto", "Auto"]].map(([m, label]) => (
+        <div role="group" aria-label="Agent mode" className="ml-auto flex rounded-full bg-white/12 p-1">
+          {[["verification", "I approve"], ["auto", "Auto"]].map(([m, label]) => (
             <button key={m} type="button" aria-pressed={mode === m} onClick={() => onMode(m)}
                     className={`min-h-10 rounded-full px-4 text-sm transition ${mode === m ? "bg-white font-semibold text-ink" : "text-white/80 hover:text-white"}`}>
               {label}
@@ -166,11 +177,11 @@ function Header({ entry, drafts, mode, running, workflow, onMode, onRun, ready, 
         </div>
         <button type="button" onClick={onRun} disabled={running}
                 className="min-h-12 rounded-full bg-mint px-5 text-[15px] font-semibold text-ink transition hover:brightness-95 disabled:opacity-60">
-          {running ? "Lancement…" : "Traiter maintenant"}
+          {running ? "Processing…" : "Process now"}
         </button>
         <button type="button" onClick={onSendAll} disabled={!ready || !!sending}
                 className="min-h-12 rounded-full bg-white px-5 text-[15px] font-semibold text-ink transition hover:brightness-95 disabled:opacity-40">
-          {sending ? `Envoi ${sending}…` : `Répondre à tous${ready ? ` (${ready})` : ""}`}
+          {sending ? `Sending ${sending}…` : `Reply to all${ready ? ` (${ready})` : ""}`}
         </button>
       </div>
 
@@ -178,20 +189,20 @@ function Header({ entry, drafts, mode, running, workflow, onMode, onRun, ready, 
         <h1 className="m-0 text-[44px] font-medium leading-none tracking-[-0.045em] sm:text-[72px]">
           {review ? (
             <>
-              <span className="word"><span>Celui-là</span></span>{" "}
+              <span className="word"><span>This one</span></span>{" "}
               <span aria-hidden="true" className="rv d2 wob mx-1 inline-grid h-[46px] w-[76px] place-items-center rounded-2xl bg-blush align-middle text-[34px] font-semibold text-ink sm:h-[60px] sm:w-[100px] sm:text-[44px]">?</span>{" "}
-              <span className="word"><span style={{ animationDelay: ".1s" }}>je te le laisse.</span></span>
+              <span className="word"><span style={{ animationDelay: ".1s" }}>is yours.</span></span>
             </>
           ) : (
             <>
-              <span className="word"><span>{drafts} brouillon{drafts > 1 ? "s" : ""}</span></span>{" "}
+              <span className="word"><span>{drafts} draft{drafts !== 1 ? "s" : ""}</span></span>{" "}
               {frame && <Crop frame={frame} w={150} h={64} scale={0.75} className="rv d2 mx-1 rounded-2xl align-middle" />}{" "}
-              <span className="word"><span style={{ animationDelay: ".1s" }}>{drafts > 1 ? "t'attendent." : "t'attend."}</span></span>
+              <span className="word"><span style={{ animationDelay: ".1s" }}>{drafts !== 1 ? "await you." : "awaits you."}</span></span>
             </>
           )}
         </h1>
         <p className="rv d2 mt-3.5 text-[17px] text-white/70">
-          {review ? "Je ne réponds jamais seul à ce que je ne t'ai pas vu faire." : "Je les ai préparés en refaisant ce que screenpipe t'a vu faire."}
+          {review ? "I never reply on my own to something I haven't seen you do." : "I prepared them by replaying what screenpipe saw you do."}
         </p>
       </div>
     </header>
@@ -211,7 +222,7 @@ function MailList({ entries, selected, onSelect }: { entries: Entry[]; selected:
                 <span className="min-w-0">
                   <span className="block truncate font-semibold">{e.subject ?? e.preview ?? "Mail"}</span>
                   <span className={`block text-[13px] ${active ? "text-white/65" : "text-muted"}`}>
-                    {(e.sender || "Inconnu")} · {isReview(e) ? "à vérifier" : statusLabel(e)}
+                    {(e.sender || "Unknown")} · {isReview(e) ? "to check" : statusLabel(e)}
                   </span>
                 </span>
                 {isReview(e) && <span aria-hidden="true" className="h-2.5 w-2.5 flex-none rounded-full bg-[#FF8A80]" />}
@@ -229,10 +240,10 @@ function MailHeader({ entry, highlight }: { entry: Entry; highlight?: boolean })
   const quote = body.split("\n").filter((l) => l.trim() && !/^(bonjour|salut|hello|coucou|merci|cordialement|bonne|a\+|karim)\b/i.test(l.trim())).join(" ");
   return (
     <div>
-      <div className="text-sm text-muted">{entry.sender ? `${entry.sender}` : "Expéditeur inconnu"}</div>
-      <h2 className="mt-1 text-[30px] font-medium leading-[1.1] tracking-[-0.04em] sm:text-4xl">{entry.subject ?? "Mail sans sujet"}</h2>
+      <div className="text-sm text-muted">{entry.sender ? `${entry.sender}` : "Unknown sender"}</div>
+      <h2 className="mt-1 text-[30px] font-medium leading-[1.1] tracking-[-0.04em] sm:text-4xl">{entry.subject ?? "No subject"}</h2>
       {(quote || body) && (
-        <p className={`mt-3 rounded-2xl px-[18px] py-3.5 text-body ${highlight ? "bg-blush/50" : "bg-soft"}`}>« {quote || body} »</p>
+        <p className={`mt-3 rounded-2xl px-[18px] py-3.5 text-body ${highlight ? "bg-blush/50" : "bg-soft"}`}>“{quote || body}”</p>
       )}
     </div>
   );
@@ -261,17 +272,17 @@ function Draft({ entry, onDone }: { entry: Entry; onDone: (msg: string) => void 
       body: JSON.stringify({ id: entry.id, reject, text: !reject && changed ? text : undefined }),
     }).then((r) => r.json());
     setBusy(null);
-    onDone(d.ok ? (reject ? "Brouillon rejeté" : "Envoyé depuis Gmail") : `Échec : ${d.message}`);
+    onDone(d.ok ? (reject ? "Draft rejected" : "Sent from Gmail") : `Failed: ${d.message}`);
   }
 
   return (
     <>
-      <section aria-label="Réponse préparée" className="rv d2 flex flex-col gap-5 rounded-[28px] bg-card p-6 sm:px-9 sm:py-8">
+      <section aria-label="Prepared reply" className="rv d2 flex flex-col gap-5 rounded-[28px] bg-card p-6 sm:px-9 sm:py-8">
         <MailHeader entry={entry} />
 
         <div>
           <label htmlFor="reply" className="mb-2 block text-sm text-muted">
-            {editable ? "Ta réponse" : entry.status === "envoyé" ? `Envoyée${entry.decided_at ? ` le ${fmtTime(entry.decided_at)}` : ""}` : "Réponse"}
+            {editable ? "Your reply" : entry.status === "envoyé" ? `Sent${entry.decided_at ? ` on ${fmtTime(entry.decided_at)}` : ""}` : "Reply"}
           </label>
           <textarea id="reply" value={text} onChange={(e) => setText(e.target.value)} readOnly={!editable} rows={6}
                     className="w-full resize-y rounded-[18px] border border-line bg-card px-5 py-[18px] text-[17px] leading-relaxed outline-none transition focus:border-ink read-only:bg-soft" />
@@ -289,31 +300,31 @@ function Draft({ entry, onDone }: { entry: Entry; onDone: (msg: string) => void 
             <div className="flex gap-2">
               <button type="button" onClick={() => act(true)} disabled={!!busy}
                       className="min-h-[52px] rounded-full border border-[#D6D4D0] px-5 text-[15px] transition hover:bg-soft disabled:opacity-50">
-                {busy === "reject" ? "…" : "Rejeter"}
+                {busy === "reject" ? "…" : "Reject"}
               </button>
               <button type="button" onClick={() => act(false)} disabled={!!busy}
                       className="min-h-[52px] rounded-full bg-ink px-7 text-[15px] font-semibold text-white transition hover:bg-[#2a2b2b] disabled:opacity-50">
-                {busy === "send" ? "Envoi via Gmail…" : "Envoyer"}
+                {busy === "send" ? "Sending via Gmail…" : "Send"}
               </button>
             </div>
           )}
         </div>
         {entry.status === "erreur" && (
-          <p className="rounded-2xl bg-blush px-4 py-3 text-sm">L'envoi a coincé ({entry.error}). Ta réponse est là : clique « Envoyer » pour réessayer, je rouvrirai le fil si le brouillon a disparu.</p>
+          <p className="rounded-2xl bg-blush px-4 py-3 text-sm">Sending got stuck ({entry.error}). Your reply is still here: click “Send” to retry, I&apos;ll reopen the thread if the draft is gone.</p>
         )}
       </section>
 
       {!!entry.context?.facts?.length && (
-        <section aria-label="Ce que je me suis rappelé" className="rv d3 rounded-[28px] bg-card p-6 sm:px-9">
-          <h3 className="m-0 text-[22px] font-medium tracking-[-0.035em]">Ce que je me suis rappelé</h3>
+        <section aria-label="What I remembered" className="rv d3 rounded-[28px] bg-card p-6 sm:px-9">
+          <h3 className="m-0 text-[22px] font-medium tracking-[-0.035em]">What I remembered</h3>
           <ul className="mt-4 flex flex-col gap-3">
             {entry.context.facts.map((f) => (
               <li key={`${f.topic}-${f.value}`} className="flex flex-wrap items-center gap-4 rounded-[20px] bg-soft p-3 pr-5">
                 <Crop frame={f} w={150} h={84} scale={0.3} focus={{ x: 260, y: 250 }} className="flex-none rounded-2xl" />
                 <div className="min-w-0 flex-[1_1_240px]">
                   <span className="rounded-full bg-peach px-3 py-1 text-[15px] font-semibold">{f.value}</span>
-                  <p className="mb-0 mt-2 text-[15px] text-body">« {f.quote} »</p>
-                  <p className="m-0 mt-1 font-mono text-xs text-muted">vu à l&apos;écran · {f.window.split(" - ")[0] || f.app} · {fmtTime(f.timestamp)}</p>
+                  <p className="mb-0 mt-2 text-[15px] text-body">“{f.quote}”</p>
+                  <p className="m-0 mt-1 font-mono text-xs text-muted">seen on screen · {f.window.split(" - ")[0] || f.app} · {fmtTime(f.timestamp)}</p>
                 </div>
               </li>
             ))}
@@ -322,13 +333,13 @@ function Draft({ entry, onDone }: { entry: Entry; onDone: (msg: string) => void 
       )}
       {!!entry.context?.missing?.length && (
         <p className="rv d3 rounded-[28px] bg-blush px-7 py-5">
-          On me demande {entry.context.missing.join(" et ")}, mais je ne l&apos;ai vu nulle part : complète avant d&apos;envoyer.
+          I&apos;m asked for {entry.context.missing.map((t) => TOPIC_EN[t] ?? t).join(" and ")}, but I haven&apos;t seen it anywhere: fill it in before sending.
         </p>
       )}
 
-      <section aria-label="Pourquoi je suis sûr" className="rv d3 flex flex-wrap items-center gap-6 rounded-[28px] bg-mint p-6">
+      <section aria-label="Why I am sure" className="rv d3 flex flex-wrap items-center gap-6 rounded-[28px] bg-mint p-6">
         {frame && (
-          <button type="button" onClick={() => setZoom(true)} aria-label="Agrandir la capture screenpipe"
+          <button type="button" onClick={() => setZoom(true)} aria-label="Enlarge the screenpipe capture"
                   className="flex-none overflow-hidden rounded-2xl transition hover:scale-[1.02]">
             <Crop frame={frame} w={240} h={130} scale={0.5} className="block" />
           </button>
@@ -336,11 +347,11 @@ function Draft({ entry, onDone }: { entry: Entry; onDone: (msg: string) => void 
         <div className="min-w-0 flex-[1_1_260px]">
           <div className="text-[26px] font-medium leading-[1.15] tracking-[-0.035em]">
             {ev?.unit === "démonstrations" && ev.observations
-              ? `Tu me l'as montré ${ev.observations} fois.`
-              : frame ? "Je t'ai déjà vu faire ça." : "Pas de capture pour celui-là."}
+              ? `You showed me ${ev.observations} time${ev.observations > 1 ? "s" : ""}.`
+              : frame ? "I've seen you do this before." : "No capture for this one."}
           </div>
           <p className="mb-3.5 mt-1.5 text-[15px]">
-            {frame ? `Même demande, même fichier. Capturé par screenpipe le ${fmtTime(frame.timestamp)}.` : "La décision repose sur le workflow appris."}
+            {frame ? `Same request, same file. Captured by screenpipe on ${fmtTime(frame.timestamp)}.` : "The decision relies on the learned workflow."}
           </p>
           <div className="flex items-center gap-3">
             <div className="h-2 flex-1 overflow-hidden rounded-full bg-ink/12">
@@ -350,10 +361,10 @@ function Draft({ entry, onDone }: { entry: Entry; onDone: (msg: string) => void 
           </div>
           {entry.reasons && (
             <details className="mt-3 text-sm">
-              <summary className="cursor-pointer select-none underline underline-offset-2">Le détail</summary>
+              <summary className="cursor-pointer select-none underline underline-offset-2">Details</summary>
               <ul className="mt-2 space-y-1">
                 {entry.reasons.map(([pts, txt]) => (
-                  <li key={txt} className="flex gap-3"><span className="w-14 flex-none text-right font-mono">{pts}</span><span>{txt}</span></li>
+                  <li key={txt} className="flex gap-3"><span className="w-14 flex-none text-right font-mono">{pts === "bloquant" ? "block" : pts}</span><span>{txt}</span></li>
                 ))}
               </ul>
             </details>
@@ -377,54 +388,54 @@ function Draft({ entry, onDone }: { entry: Entry; onDone: (msg: string) => void 
 function Review({ entry, onDone }: { entry: Entry; onDone: (msg: string, select?: string) => void }) {
   const [busy, setBusy] = useState(false);
   const why = entry.sensitive
-    ? "Ça parle d'argent ou de juridique : je n'ai rien touché."
+    ? "It's about money or legal matters: I didn't touch it."
     : entry.status === "erreur"
-      ? "Quelque chose a coincé pendant que je rejouais ton geste : je n'ai rien envoyé."
-      : "Je ne t'ai jamais vu traiter ce genre de mail : je n'ai rien touché.";
+      ? "Something got stuck while I was replaying your gesture: I sent nothing."
+      : "I've never seen you handle this kind of mail: I didn't touch it.";
 
   async function teach() {
     setBusy(true);
     const d = await fetch("/api/teach", { method: "POST" }).then((r) => r.json());
     setBusy(false);
-    onDone(d.ok ? "screenpipe t'observe pendant 10 min : traite ce mail dans Gmail comme d'habitude" : "screenpipe indisponible");
+    onDone(d.ok ? "screenpipe is watching you for 10 min: handle this mail in Gmail as usual" : "screenpipe unavailable");
   }
 
   async function remember() {
     setBusy(true);
-    onDone("Je cherche dans ta mémoire screenpipe… la souris va bouger");
+    onDone("Searching your screenpipe memory… the mouse will move");
     const d = await fetch("/api/reply", { method: "POST", body: JSON.stringify({ id: entry.id }) }).then((r) => r.json());
     setBusy(false);
-    onDone(d.ok ? "Brouillon prêt, rédigé avec ce que tu as vu" : `Pas de réponse : ${d.message}`, d.id);
+    onDone(d.ok ? "Draft ready, written from what you saw" : `No reply: ${d.message}`, d.id);
   }
 
   async function ignore() {
     const d = await fetch("/api/approve", { method: "POST", body: JSON.stringify({ id: entry.id, reject: true }) }).then((r) => r.json());
-    onDone(d.ok ? "Ignoré" : `Échec : ${d.message}`);
+    onDone(d.ok ? "Ignored" : `Failed: ${d.message}`);
   }
 
   return (
     <>
-      <section aria-label="Mail reçu" className="rv d2 rounded-[28px] bg-card p-6 sm:px-9 sm:py-8">
+      <section aria-label="Received mail" className="rv d2 rounded-[28px] bg-card p-6 sm:px-9 sm:py-8">
         <MailHeader entry={entry} highlight />
       </section>
-      <section aria-label="Décision" className="rv d3 flex flex-col gap-3.5 rounded-[28px] bg-blush p-6 sm:px-9 sm:py-8">
-        <h3 className="m-0 text-[30px] font-medium leading-[1.15] tracking-[-0.04em]">Jamais vu. Tu veux me montrer ?</h3>
-        <p className="m-0 max-w-[600px]">{why} Traite-le une fois devant screenpipe, je saurai faire la prochaine fois.</p>
+      <section aria-label="Decision" className="rv d3 flex flex-col gap-3.5 rounded-[28px] bg-blush p-6 sm:px-9 sm:py-8">
+        <h3 className="m-0 text-[30px] font-medium leading-[1.15] tracking-[-0.04em]">Never seen this. Want to show me?</h3>
+        <p className="m-0 max-w-[600px]">{why} Handle it once in front of screenpipe and I&apos;ll know how next time.</p>
         <div className="flex flex-wrap gap-2 pt-1.5">
           <button type="button" onClick={teach} disabled={busy}
                   className="flex min-h-[52px] items-center gap-2.5 rounded-full bg-ink pl-5 pr-6 text-[15px] font-semibold text-white transition hover:bg-[#2a2b2b] disabled:opacity-60">
             <span className="rec h-2.5 w-2.5 rounded-full bg-coral" />
-            Montre-moi une fois
+            Show me once
           </button>
           {!entry.sensitive && (
             <button type="button" onClick={remember} disabled={busy}
                     className="min-h-[52px] rounded-full bg-white px-[22px] text-[15px] font-semibold transition hover:bg-white/80 disabled:opacity-60">
-              Chercher dans ma mémoire et répondre
+              Search my memory and reply
             </button>
           )}
           <button type="button" onClick={ignore}
                   className="min-h-[52px] rounded-full border border-ink/25 px-[22px] text-[15px] transition hover:bg-white/40">
-            Ignorer
+            Ignore
           </button>
         </div>
       </section>

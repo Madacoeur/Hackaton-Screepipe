@@ -6,6 +6,6 @@ import { FILES_DIR } from "@/lib/server";
 export async function GET(req: Request) {
   const name = new URL(req.url).searchParams.get("name") ?? "";
   const p = path.join(FILES_DIR, path.basename(name));
-  if (!name.endsWith(".pdf") || !existsSync(p)) return new Response("fichier introuvable", { status: 404 });
+  if (!name.endsWith(".pdf") || !existsSync(p)) return new Response("file not found", { status: 404 });
   return new Response(readFileSync(p), { headers: { "Content-Type": "application/pdf" } });
 }

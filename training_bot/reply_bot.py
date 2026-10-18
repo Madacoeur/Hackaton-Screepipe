@@ -8,6 +8,7 @@ Gmail avec la souris -> tape une réponse -> envoie.
 """
 import argparse
 import ctypes
+import ctypes.wintypes
 import json
 import random
 import re
@@ -18,6 +19,7 @@ from datetime import datetime
 
 import pyautogui  # importé en premier : rend le process DPI-aware (coordonnées physiques)
 from pywinauto import Desktop
+from pywinauto.win32structures import RECT
 from selenium import webdriver
 from selenium.common.exceptions import (ElementClickInterceptedException, StaleElementReferenceException,
                                         TimeoutException)
@@ -43,29 +45,64 @@ def port_open(port):
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
+NO_WINDOW = 0x08000000  # CREATE_NO_WINDOW
+
+
+def launch_brave():
+    """Démarre le Brave de l'agent via WMI : le processus n'appartient ni à ce script ni au job d'une
+    pipe screenpipe, qui tue tous ses processus enfants à la fin du passage (Brave « crashait »)."""
+    args = [BROWSER_PATH, f"--remote-debugging-port={DEBUG_PORT}", f"--user-data-dir={PROFILE_DIR}",
+            "--no-first-run", "--no-default-browser-check",
+            # Gmail doit continuer à se charger même quand Brave est caché derrière d'autres fenêtres
+            "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding",
+            "--disable-background-timer-throttling", INBOX_URL]
+    cmd = subprocess.list2cmdline(args).replace("'", "''")
+    ps = f"(Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{{CommandLine='{cmd}'}}).ReturnValue"
+    out = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True,
+                         creationflags=NO_WINDOW)
+    if out.stdout.strip() != "0":  # WMI indisponible : lancement détaché classique
+        subprocess.Popen(args, creationflags=0x00000008 | 0x01000000)  # DETACHED_PROCESS | BREAKAWAY_FROM_JOB
+
+
+def debug_brave_pid():
+    """PID du Brave de l'agent : celui qui écoute sur le port de debug (pas le Brave perso)."""
+    out = subprocess.run(["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True, encoding="oem",
+                         errors="replace", creationflags=NO_WINDOW).stdout
+    for line in out.splitlines():
+        parts = line.split()
+        # socket en écoute = adresse distante 0.0.0.0:0 (indépendant de la langue de Windows)
+        if len(parts) >= 5 and parts[1].endswith(f":{DEBUG_PORT}") and parts[2] in ("0.0.0.0:0", "[::]:0"):
+            return int(parts[4])
+    return None
+
+
 def get_driver():
     """Lance Brave en mode normal (pas "automatisé", Google accepte la connexion) puis s'y attache."""
     if not port_open(DEBUG_PORT):
-        subprocess.Popen([
-            BROWSER_PATH,
-            f"--remote-debugging-port={DEBUG_PORT}",
-            f"--user-data-dir={PROFILE_DIR}",
-            "--no-first-run",
-            "--no-default-browser-check",
-            INBOX_URL,
-        ])
+        launch_brave()
         for _ in range(40):
             if port_open(DEBUG_PORT):
                 break
             time.sleep(0.5)
+        time.sleep(2)  # laisse la fenêtre apparaître
     options = webdriver.ChromeOptions()
     options.binary_location = BROWSER_PATH
     options.debugger_address = f"127.0.0.1:{DEBUG_PORT}"
     driver = webdriver.Chrome(options=options)
-    for handle in driver.window_handles:  # se placer sur l'onglet Gmail s'il existe
+    # un seul onglet Gmail, au premier plan : après une restauration de session Brave en rouvre parfois
+    # plusieurs, et un onglet en arrière-plan n'affiche pas la liste des mails
+    gmail = []
+    for handle in driver.window_handles:
         driver.switch_to.window(handle)
         if "mail.google.com" in driver.current_url:
-            break
+            gmail.append((driver.execute_script("return document.visibilityState") != "visible", handle))
+    if gmail:
+        gmail.sort()
+        for _, handle in gmail[1:]:
+            driver.switch_to.window(handle)
+            driver.close()
+        driver.switch_to.window(gmail[0][1])
+        driver.execute_cdp_cmd("Page.bringToFront", {})
     return driver
 
 
@@ -92,11 +129,12 @@ def wait_visible(driver, xpath, timeout=20):
 
 
 def brave_window():
-    # le titre bouge (compteur de non lus) : on cherche juste une fenêtre Brave sur Gmail
-    for win in Desktop(backend="win32").windows(class_name="Chrome_WidgetWin_1", title_re=".*Gmail.*Brave.*"):
-        return win
-    # onglet actif sur autre chose que Gmail (ex. un document affiché par le bot de contexte)
-    for win in Desktop(backend="win32").windows(class_name="Chrome_WidgetWin_1", title_re=".* Brave$"):
+    """Fenêtre du Brave de l'agent. Filtrée par PID : un Brave perso ouvert sur Gmail ne doit pas être pris."""
+    pid = debug_brave_pid()
+    wins = [w for w in Desktop(backend="win32").windows(class_name="Chrome_WidgetWin_1", title_re=".* Brave$")
+            if pid is None or w.process_id() == pid]
+    # le titre bouge (compteur de non lus) : on préfère l'onglet Gmail, sinon n'importe quelle fenêtre de l'agent
+    for win in sorted(wins, key=lambda w: "Gmail" not in w.window_text()):
         return win
     raise RuntimeError("fenêtre Brave introuvable")
 
@@ -118,7 +156,15 @@ def viewport_rect(driver):
             if child.is_visible():
                 return child.rectangle()
         focus_browser()
-    raise RuntimeError("zone de page Brave introuvable")
+    # repli : bas de la zone cliente de la fenêtre, hauteur = innerHeight (barres d'onglets/adresse au-dessus)
+    win = brave_window()
+    rect, pt = ctypes.wintypes.RECT(), ctypes.wintypes.POINT(0, 0)
+    ctypes.windll.user32.GetClientRect(win.handle, ctypes.byref(rect))
+    ctypes.windll.user32.ClientToScreen(win.handle, ctypes.byref(pt))
+    dpr = driver.execute_script("return window.devicePixelRatio") or 1
+    height = int(driver.execute_script("return window.innerHeight") * dpr)
+    bottom = pt.y + rect.bottom
+    return RECT(pt.x, bottom - height, pt.x + rect.right, bottom)
 
 
 def screen_center(driver, el):
@@ -134,10 +180,14 @@ def screen_center(driver, el):
 ROW = "//tr[contains(@class,'zA')]"
 
 
+EMPTY_LIST = "//div[@role='main']//div[contains(@class,'aRs')]"  # « Votre onglet Principale est vide »
+
+
 def open_inbox(driver):
+    """Boîte de réception chargée : des rangées, ou le message de liste vide."""
     if driver.current_url != INBOX_URL:  # un mail ouvert = #inbox/<id>
         driver.get(INBOX_URL)
-    wait_visible(driver, ROW, 60)
+    wait_visible(driver, f"{ROW} | {EMPTY_LIST}", 60)
 
 
 def wait_for_new_mail(driver, subject=None, timeout=180):

@@ -47,11 +47,11 @@ def demo_frames(example, stem):
     if explorer:
         c = explorer[-1]
         out.append({"frame_id": c["frame_id"], "timestamp": c["timestamp"], "app": "explorer.exe",
-                    "window": c.get("window_title") or "", "label": f"Tu prends {stem} dans l'Explorateur"})
+                    "window": c.get("window_title") or "", "label": f"You pick {stem} in File Explorer"})
     if dropped:
         c = dropped[0]
         out.append({"frame_id": c["frame_id"], "timestamp": c["timestamp"], "app": "brave.exe",
-                    "window": c.get("window_title") or "", "label": f"Tu le glisses dans ta réponse à « {example['subject']} »"})
+                    "window": c.get("window_title") or "", "label": f"You drag it into your reply to “{example['subject']}”"})
     return out
 
 
@@ -87,13 +87,18 @@ def past_evidence(file_name, days=7):
     except Exception as e:  # screenpipe indisponible : la décision reste possible, sans preuve
         return {"error": str(e), "frames": [], "observations": 0, "memory": None}
     for f in explorer:
-        f["label"] = "Tu as sélectionné ce fichier dans l'Explorateur"
+        f["label"] = "You selected this file in File Explorer"
     for f in gmail:
-        f["label"] = "Tu l'as joint à une réponse Gmail"
+        f["label"] = "You attached it to a Gmail reply"
     memory = mem[0]["content"] if mem else None
     return {"frames": explorer + gmail, "observations": n_gmail,
             "memory": {"id": memory.get("id"), "text": (memory.get("content") or memory.get("text") or "")[:500]}
             if memory else None}
+
+
+UNIT_EN = {"démonstrations": "demonstrations", "captures": "captures"}
+SCENARIO_EN = {"devis": "quote", "facture": "invoice", "contrat": "contract", "planning": "schedule",
+               "maquette": "mockup", "cahier": "specs"}
 
 
 def confidence(pb, margin, file_exists, sender_known, text, evidence):
@@ -102,24 +107,24 @@ def confidence(pb, margin, file_exists, sender_known, text, evidence):
     reasons, score = [], 0
     if margin >= 1:
         score += 35
-        reasons.append(("+35", f"type de demande reconnu : workflow « {pb['scenario']} »"))
+        reasons.append(("+35", f"request type recognised: “{SCENARIO_EN.get(pb['scenario'], pb['scenario'])}” workflow"))
     if file_exists:
         score += 15
-        reasons.append(("+15", f"fichier trouvé : {pb['variables']['fichier']}"))
+        reasons.append(("+15", f"file found: {pb['variables']['fichier']}"))
     n = pb["observations"]["executions_analysees"]
     if n >= 5:
         score += 20
-        reasons.append(("+20", f"workflow appris sur {n} exécutions observées"))
+        reasons.append(("+20", f"workflow learned from {n} observed runs"))
     if evidence.get("frames"):
         score += 15
-        reasons.append(("+15", f"geste retrouvé dans screenpipe ({evidence.get('observations', 0)} "
-                               f"{evidence.get('unit', 'captures')})"))
+        reasons.append(("+15", f"gesture found in screenpipe ({evidence.get('observations', 0)} "
+                               f"{UNIT_EN.get(evidence.get('unit'), 'captures')})"))
     if sender_known:
         score += 15
-        reasons.append(("+15", "expéditeur déjà rencontré"))
+        reasons.append(("+15", "sender seen before"))
     else:
-        reasons.append(("+0", "expéditeur inconnu"))
+        reasons.append(("+0", "unknown sender"))
     hits = [w for w in SENSITIVE if w in text.lower()]
     if hits:
-        reasons.append(("bloquant", f"mail sensible ({', '.join(hits)}) : toujours vérifié par un humain"))
+        reasons.append(("bloquant", f"sensitive mail ({', '.join(hits)}): always checked by a human"))
     return min(score, 100), reasons, bool(hits)

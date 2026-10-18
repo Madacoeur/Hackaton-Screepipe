@@ -1,16 +1,11 @@
-import { spawn } from "node:child_process";
 import path from "node:path";
-import { ROOT } from "@/lib/server";
+import { ROOT, run } from "@/lib/server";
 
-/** « Traiter maintenant » : lance l'agent tout de suite, en arrière-plan et sans fenêtre de terminal. */
+/** « Traiter maintenant » : agent/process_now.py prépare screenpipe et Brave, traite les mails non lus,
+ *  puis on renvoie son résumé (une ligne lisible) une fois le passage terminé. */
 export async function POST() {
-  const child = spawn("python", [path.join(ROOT, "agent", "run_agent.py"), "--max", "3"], {
-    cwd: ROOT,
-    env: { ...process.env, PYTHONIOENCODING: "utf-8" },
-    windowsHide: true,
-    detached: true,
-    stdio: "ignore",
-  });
-  child.unref();
-  return Response.json({ ok: true });
+  const r = await run("python", [path.join(ROOT, "agent", "process_now.py"), "--max", "3"], ROOT, 900_000);
+  const last = r.stdout.split(/\r?\n/).filter((l) => l.startsWith("[process]")).pop();
+  const message = last?.replace("[process] ", "") ?? (r.stderr.trim().split(/\r?\n/).pop() || "the run returned nothing");
+  return Response.json({ ok: r.code === 0, message });
 }

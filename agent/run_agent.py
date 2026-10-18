@@ -41,7 +41,7 @@ from reply_bot import (ROW, attachment_present, click_reply, drag_file_to, focus
                        read_open_mail, screen_center, visible, wait_draft_saved)
 
 sys.path.insert(0, str(ROOT / "agent"))
-from context import AGENDA_WORDS, fact_sentence, find_context, topics_of  # noqa: E402
+from context import AGENDA_WORDS, TOPIC_EN, fact_sentence, find_context, topics_of  # noqa: E402
 from evidence import AUTO_THRESHOLD, SENSITIVE, confidence, past_evidence  # noqa: E402
 
 try:  # clé Anthropic optionnelle, dans training_bot/.env
@@ -147,10 +147,16 @@ def notify(title, body):
 # ------------------------------------------------------------------ exécution
 
 def already_answered(row):
-    """Fil dont le dernier message est de moi ("Karim, moi 3") : la demande a déjà été traitée."""
+    """Fil dont le dernier message est de moi ("Karim, moi 3") ou qui a déjà un brouillon de réponse
+    ("omar, Brouillon 2") : la demande a déjà été traitée, on ne la refait pas."""
     senders = row.find_elements(By.CSS_SELECTOR, ".yX")
     names = re.sub(r"\s*\d+$", "", senders[0].text if senders else "").split(",")
-    return names[-1].strip().lower() in ("moi", "me")
+    return names[-1].strip().lower() in ("moi", "me", "brouillon", "draft")
+
+
+def thread_id(row):
+    ids = row.find_elements(By.CSS_SELECTOR, "[data-thread-id]")
+    return ids[0].get_attribute("data-thread-id") if ids else None
 
 
 def unread_rows(driver):
@@ -175,7 +181,7 @@ def run_playbook(driver, pb, row, decide):
     send, info = decide(subject, body, first_name, path)
     info.update(subject=subject, body=body, sender=first_name, send=send)
     if not path.exists():
-        return info, None, f"fichier introuvable : {path}"
+        return info, None, f"file not found: {path}"
 
     box = click_reply(driver)                                       # Répondre
     time.sleep(1)
@@ -240,11 +246,11 @@ def run_context_reply(driver, row, base, senders):
     time.sleep(2)
     known = (first_name or "").lower() in senders
     score = min(70, 30 + 15 * len(ctx["facts"]) + (10 if known else 0))
-    reasons = [("+30", "pas de geste appris : réponse construite avec le contexte seul"),
-               (f"+{15 * len(ctx['facts'])}", "contexte retrouvé dans screenpipe : "
-                + ", ".join(f"{f['topic']} = {f['value']}" for f in ctx["facts"]))]
-    reasons.append(("+10", "expéditeur déjà rencontré") if known else ("+0", "expéditeur inconnu"))
-    reasons.append(("bloquant", "aucun workflow appris pour ce type de mail : toujours validé par toi"))
+    reasons = [("+30", "no learned gesture: reply built from context only"),
+               (f"+{15 * len(ctx['facts'])}", "context found in screenpipe: "
+                + ", ".join(f"{TOPIC_EN.get(f['topic'], f['topic'])} = {f['value']}" for f in ctx["facts"]))]
+    reasons.append(("+10", "sender seen before") if known else ("+0", "unknown sender"))
+    reasons.append(("bloquant", "no learned workflow for this kind of mail: you always approve it"))
     return {**base, "scenario": "contexte", "subject": subject, "sender": first_name, "body": body, "file": None,
             "steps": ["ouvrir_mail", "chercher_contexte", "rediger_reponse"], "reply": reply, "status": "brouillon",
             "error": None, "score": score, "reasons": reasons, "sensitive": False,
@@ -280,7 +286,7 @@ def main():
 
     done, review = [], []
     # mails déjà signalés « à vérifier » : ils restent non lus dans Gmail, on ne les re-signale pas
-    seen = set()
+    seen, threads = set(), set()
     if LOG.exists():
         for line in LOG.read_text(encoding="utf-8").splitlines():
             if line.strip() and json.loads(line).get("status") == "à vérifier":
@@ -295,12 +301,15 @@ def main():
             time.sleep(5)
             candidates = visible(driver, ROW)[:1]
         else:
-            candidates = [r for r in unread_rows(driver) if clean_preview(r.text) not in seen]
+            candidates = [r for r in unread_rows(driver)
+                          if clean_preview(r.text) not in seen and thread_id(r) not in threads]
         if not candidates:
             break
         row = candidates[0]
         preview = clean_preview(row.text)
         seen.add(preview)
+        if thread_id(row):  # l'aperçu change une fois le brouillon écrit : on retient aussi le fil
+            threads.add(thread_id(row))
         if not preview:  # rangée Gmail en cours de redessin : on la reprendra au prochain passage
             continue
         key, margin = choose_playbook(playbooks, row.text)
@@ -321,7 +330,7 @@ def main():
             review.append(preview)
             if not args.dry:
                 log_entry({**base, "status": "à vérifier", "preview": preview, "score": 0, **meta,
-                           "reasons": [["bloquant", "aucun workflow appris ne correspond à ce mail : je ne réponds pas"]]})
+                           "reasons": [["bloquant", "no learned workflow matches this mail: I won't reply"]]})
             continue
         pb = playbooks[key]
         print(f"[agent] {preview}\n        -> workflow '{key}' ({pb_file(pb)})")
@@ -336,12 +345,12 @@ def main():
                                                    f"{subject}\n{body}", ev)
             ctx = find_context(subject, body, first_name)  # ce que l'utilisateur a vu à ce sujet
             if ctx["facts"]:
-                reasons.append(("+0", "contexte retrouvé dans screenpipe : "
-                                + ", ".join(f"{f['topic']} = {f['value']}" for f in ctx["facts"])))
+                reasons.append(("+0", "context found in screenpipe: "
+                                + ", ".join(f"{TOPIC_EN.get(f['topic'], f['topic'])} = {f['value']}" for f in ctx["facts"])))
             blocked = sensitive or bool(ctx["missing"])
             if ctx["missing"]:
-                reasons.append(("bloquant", "on me demande une info que je n'ai pas retrouvée ("
-                                + ", ".join(ctx["missing"]) + ") : à toi de compléter"))
+                reasons.append(("bloquant", "I'm asked for something I couldn't find ("
+                                + ", ".join(TOPIC_EN.get(t, t) for t in ctx["missing"]) + "): please fill it in"))
             send = args.send or (mode == "auto" and score >= AUTO_THRESHOLD and not blocked)
             return send, {"score": score, "reasons": reasons, "sensitive": sensitive, "evidence": ev, "context": ctx}
 

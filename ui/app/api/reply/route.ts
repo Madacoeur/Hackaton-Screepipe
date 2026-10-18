@@ -6,7 +6,7 @@ import { ROOT, readEntries, run, setStatus } from "@/lib/server";
 export async function POST(req: Request) {
   const { id } = await req.json();
   const entry = readEntries().find((e) => e.id === id);
-  if (!entry?.subject) return Response.json({ ok: false, message: "mail introuvable" }, { status: 404 });
+  if (!entry?.subject) return Response.json({ ok: false, message: "mail not found" }, { status: 404 });
   const before = readEntries().length;
   const r = await run("python", [path.join(ROOT, "agent", "run_agent.py"), "--subject", entry.subject], ROOT, 240_000);
   const created = readEntries().slice(0, readEntries().length - before).find((e) => e.status === "brouillon");
@@ -15,5 +15,5 @@ export async function POST(req: Request) {
     return Response.json({ ok: true, id: created.id });
   }
   const line = (r.stdout + r.stderr).split(/\r?\n/).filter((l) => l.includes("[agent]")).pop() ?? "";
-  return Response.json({ ok: false, message: line.includes("VÉRIFIER") ? "rien trouvé dans ta mémoire pour répondre" : line || "échec" });
+  return Response.json({ ok: false, message: line.includes("VÉRIFIER") ? "nothing in your memory to reply with" : line || "failed" });
 }

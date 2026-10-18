@@ -37,7 +37,7 @@ def find_entry(entry_id):
             e = json.loads(line)
             if e.get("id", f"L{i}") == entry_id:
                 return e
-    sys.exit(f"entrée {entry_id} introuvable")
+    sys.exit(f"entry {entry_id} not found")
 
 
 def set_status(entry_id, status, **extra):
@@ -63,7 +63,7 @@ def send_draft(entry, new_text=None):
         time.sleep(5)
         threads = visible(driver, ROW)
         if not threads:
-            raise RuntimeError(f"mail « {subject} » introuvable dans Gmail")
+            raise RuntimeError(f"mail “{subject}” not found in Gmail")
         threads[0].click()
         box = click_reply(driver)
         if new_text is None:
@@ -78,7 +78,7 @@ def send_draft(entry, new_text=None):
         box.send_keys(Keys.DELETE)
         human_type(box, new_text)
     if entry.get("file") and not driver.find_elements(By.XPATH, f"//*[contains(normalize-space(), '{entry['file']}') and not(*)]"):
-        raise RuntimeError(f"pièce jointe {entry['file']} absente du brouillon, envoi annulé")
+        raise RuntimeError(f"attachment {entry['file']} missing from the draft, sending cancelled")
     box.send_keys(Keys.CONTROL, Keys.ENTER)
     time.sleep(3)
 
@@ -100,7 +100,7 @@ def main():
         send_draft(entry, text)
     except Exception as e:
         set_status(args.id, "erreur", error=str(e))
-        print(f"erreur : {e}")
+        print(f"error: {e}")
         sys.exit(1)
     set_status(args.id, "envoyé", edited=text is not None, final_text=text or entry.get("reply"))
     print("envoyé")
