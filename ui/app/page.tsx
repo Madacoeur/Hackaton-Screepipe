@@ -13,7 +13,8 @@ function statusLabel(e: Entry) {
 }
 
 function isReview(e: Entry) {
-  return e.status === "à vérifier" || e.status === "erreur" || !!e.sensitive;
+  // pas de réponse préparée : mail inconnu, ou sensible. Une erreur d'envoi garde son brouillon (vue brouillon).
+  return e.status === "à vérifier" || (!!e.sensitive && !e.reply);
 }
 
 function pickFrame(e: Entry | null, app = "brave.exe"): Frame | undefined {
@@ -94,17 +95,34 @@ export default function Home() {
     setToast(r.ok ? "C'est parti : la souris va bouger quelques secondes" : "Impossible de lancer screenpipe");
   }
 
+  // brouillons prêts à partir : ni sensibles, ni en attente d'une info manquante
+  const ready = entries.filter((e) => e.status === "brouillon" && !e.sensitive && !e.context?.missing?.length);
+  const [sending, setSending] = useState<string | null>(null);
+
+  async function sendAll() {
+    if (!ready.length || !window.confirm(`Envoyer les ${ready.length} réponses prêtes depuis Gmail ?`)) return;
+    let ok = 0;
+    for (const [i, e] of ready.entries()) {
+      setSending(`${i + 1}/${ready.length}`);
+      const d = await fetch("/api/approve", { method: "POST", body: JSON.stringify({ id: e.id }) }).then((r) => r.json());
+      if (d.ok) ok++;
+      await load();
+    }
+    setSending(null);
+    setToast(`${ok} réponse${ok > 1 ? "s" : ""} envoyée${ok > 1 ? "s" : ""} sur ${ready.length}`);
+  }
+
   return (
     <div className="flex min-h-dvh flex-col gap-3 p-3">
       <Header entry={entry} drafts={drafts} mode={mode} running={running} workflow={workflow}
-              onMode={switchMode} onRun={runNow} />
+              onMode={switchMode} onRun={runNow} ready={ready.length} sending={sending} onSendAll={sendAll} />
 
       <div className="flex flex-wrap items-start gap-3">
         <MailList entries={entries} selected={selected} onSelect={setSelected} />
         <main className="flex min-w-0 flex-[999_1_560px] flex-col gap-3">
           {entry ? (
             isReview(entry)
-              ? <Review key={entry.id} entry={entry} onDone={(m) => { setToast(m); load(); }} />
+              ? <Review key={entry.id} entry={entry} onDone={(m, id) => { setToast(m); if (id) setSelected(id); load(); }} />
               : <Draft key={entry.id} entry={entry} onDone={(m) => { setToast(m); load(); }} />
           ) : (
             <section className="rv rounded-[28px] bg-card p-10 text-center text-muted">
@@ -123,9 +141,9 @@ export default function Home() {
   );
 }
 
-function Header({ entry, drafts, mode, running, workflow, onMode, onRun }: {
+function Header({ entry, drafts, mode, running, workflow, onMode, onRun, ready, sending, onSendAll }: {
   entry: Entry | null; drafts: number; mode: string; running: boolean; workflow: Workflow | null;
-  onMode: (m: string) => void; onRun: () => void;
+  onMode: (m: string) => void; onRun: () => void; ready: number; sending: string | null; onSendAll: () => void;
 }) {
   const review = entry && isReview(entry);
   const frame = pickFrame(entry, "explorer.exe");
@@ -149,6 +167,10 @@ function Header({ entry, drafts, mode, running, workflow, onMode, onRun }: {
         <button type="button" onClick={onRun} disabled={running}
                 className="min-h-12 rounded-full bg-mint px-5 text-[15px] font-semibold text-ink transition hover:brightness-95 disabled:opacity-60">
           {running ? "Lancement…" : "Traiter maintenant"}
+        </button>
+        <button type="button" onClick={onSendAll} disabled={!ready || !!sending}
+                className="min-h-12 rounded-full bg-white px-5 text-[15px] font-semibold text-ink transition hover:brightness-95 disabled:opacity-40">
+          {sending ? `Envoi ${sending}…` : `Répondre à tous${ready ? ` (${ready})` : ""}`}
         </button>
       </div>
 
@@ -180,7 +202,7 @@ function MailList({ entries, selected, onSelect }: { entries: Entry[]; selected:
   return (
     <nav aria-label="Mails" className="rv d1 w-full rounded-[28px] bg-card p-3 md:w-auto md:max-w-[320px] md:flex-[1_1_260px]">
       <ul className="max-h-[34vh] overflow-y-auto md:max-h-[60vh]">
-        {entries.map((e) => {
+        {entries.filter((e) => e.status !== "remplacé").map((e) => {
           const active = e.id === selected;
           return (
             <li key={e.id} className="mb-1">
@@ -217,7 +239,7 @@ function MailHeader({ entry, highlight }: { entry: Entry; highlight?: boolean })
 }
 
 function Draft({ entry, onDone }: { entry: Entry; onDone: (msg: string) => void }) {
-  const editable = entry.status === "brouillon";
+  const editable = entry.status === "brouillon" || entry.status === "erreur";
   const [text, setText] = useState(entry.final_text ?? entry.reply ?? "");
   const [busy, setBusy] = useState<null | "send" | "reject">(null);
   const [zoom, setZoom] = useState(false);
@@ -276,7 +298,9 @@ function Draft({ entry, onDone }: { entry: Entry; onDone: (msg: string) => void 
             </div>
           )}
         </div>
-        {entry.error && <p className="rounded-2xl bg-blush px-4 py-3 text-sm">{entry.error}</p>}
+        {entry.status === "erreur" && (
+          <p className="rounded-2xl bg-blush px-4 py-3 text-sm">L'envoi a coincé ({entry.error}). Ta réponse est là : clique « Envoyer » pour réessayer, je rouvrirai le fil si le brouillon a disparu.</p>
+        )}
       </section>
 
       {!!entry.context?.facts?.length && (
@@ -350,7 +374,7 @@ function Draft({ entry, onDone }: { entry: Entry; onDone: (msg: string) => void 
   );
 }
 
-function Review({ entry, onDone }: { entry: Entry; onDone: (msg: string) => void }) {
+function Review({ entry, onDone }: { entry: Entry; onDone: (msg: string, select?: string) => void }) {
   const [busy, setBusy] = useState(false);
   const why = entry.sensitive
     ? "Ça parle d'argent ou de juridique : je n'ai rien touché."
@@ -363,6 +387,14 @@ function Review({ entry, onDone }: { entry: Entry; onDone: (msg: string) => void
     const d = await fetch("/api/teach", { method: "POST" }).then((r) => r.json());
     setBusy(false);
     onDone(d.ok ? "screenpipe t'observe pendant 10 min : traite ce mail dans Gmail comme d'habitude" : "screenpipe indisponible");
+  }
+
+  async function remember() {
+    setBusy(true);
+    onDone("Je cherche dans ta mémoire screenpipe… la souris va bouger");
+    const d = await fetch("/api/reply", { method: "POST", body: JSON.stringify({ id: entry.id }) }).then((r) => r.json());
+    setBusy(false);
+    onDone(d.ok ? "Brouillon prêt, rédigé avec ce que tu as vu" : `Pas de réponse : ${d.message}`, d.id);
   }
 
   async function ignore() {
@@ -384,6 +416,12 @@ function Review({ entry, onDone }: { entry: Entry; onDone: (msg: string) => void
             <span className="rec h-2.5 w-2.5 rounded-full bg-coral" />
             Montre-moi une fois
           </button>
+          {!entry.sensitive && (
+            <button type="button" onClick={remember} disabled={busy}
+                    className="min-h-[52px] rounded-full bg-white px-[22px] text-[15px] font-semibold transition hover:bg-white/80 disabled:opacity-60">
+              Chercher dans ma mémoire et répondre
+            </button>
+          )}
           <button type="button" onClick={ignore}
                   className="min-h-[52px] rounded-full border border-ink/25 px-[22px] text-[15px] transition hover:bg-white/40">
             Ignorer

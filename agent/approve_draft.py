@@ -9,6 +9,7 @@ import argparse
 import json
 import sys
 import time
+import urllib.parse
 from datetime import datetime
 from pathlib import Path
 
@@ -18,7 +19,11 @@ sys.path.insert(0, str(ROOT / "training_bot"))
 from selenium.webdriver.common.by import By  # noqa: E402
 from selenium.webdriver.common.keys import Keys  # noqa: E402
 
-from reply_bot import ROW, focus_browser, get_driver, human_type, layout_windows, visible, wait_visible  # noqa: E402
+from selenium.webdriver.support.ui import WebDriverWait  # noqa: E402
+
+from config import FILES_DIR  # noqa: E402
+from reply_bot import (ROW, attachment_present, click_reply, focus_browser, get_driver, human_type,  # noqa: E402
+                       layout_windows, visible, wait_visible)
 
 LOG = ROOT / "agent" / "agent_log.jsonl"
 STATUS = ROOT / "agent" / "status.json"
@@ -46,19 +51,33 @@ def send_draft(entry, new_text=None):
     focus_browser()
     layout_windows(driver)
     driver.get(DRAFTS_URL)
-    time.sleep(4)
+    time.sleep(6)
     subject = entry["subject"]
     rows = [r for r in visible(driver, ROW) if subject in r.text]
-    if not rows:
-        raise RuntimeError(f"brouillon « {subject} » introuvable dans Gmail")
-    rows[0].click()
-    box = wait_visible(driver, "//div[@contenteditable='true' and @role='textbox']")[-1]
+    if rows:
+        rows[0].click()
+        box = wait_visible(driver, "//div[@contenteditable='true' and @role='textbox']")[-1]
+    else:
+        # brouillon perdu (fermé avant d'être enregistré, ou déjà parti) : on rouvre le fil et on réécrit
+        driver.get("https://mail.google.com/mail/u/0/#search/" + urllib.parse.quote(f'subject:"{subject}"'))
+        time.sleep(5)
+        threads = visible(driver, ROW)
+        if not threads:
+            raise RuntimeError(f"mail « {subject} » introuvable dans Gmail")
+        threads[0].click()
+        box = click_reply(driver)
+        if new_text is None:
+            new_text = entry.get("final_text") or entry.get("reply") or ""
+        if entry.get("file") and not attachment_present(driver, entry["file"]):
+            driver.find_elements(By.XPATH, "//input[@type='file']")[-1].send_keys(entry.get("file_path")
+                                                                             or str(FILES_DIR / entry["file"]))
+            WebDriverWait(driver, 20).until(lambda d: attachment_present(d, entry["file"]))
     if new_text is not None:
         box.click()
         box.send_keys(Keys.CONTROL, "a")
         box.send_keys(Keys.DELETE)
         human_type(box, new_text)
-    if not driver.find_elements(By.XPATH, f"//*[contains(normalize-space(), '{entry['file']}') and not(*)]"):
+    if entry.get("file") and not driver.find_elements(By.XPATH, f"//*[contains(normalize-space(), '{entry['file']}') and not(*)]"):
         raise RuntimeError(f"pièce jointe {entry['file']} absente du brouillon, envoi annulé")
     box.send_keys(Keys.CONTROL, Keys.ENTER)
     time.sleep(3)

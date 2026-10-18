@@ -220,6 +220,19 @@ def click_reply(driver):
     return wait_visible(driver, "//div[@contenteditable='true' and @role='textbox']")[-1]
 
 
+def wait_draft_saved(driver, timeout=12):
+    """Gmail enregistre le brouillon quelques secondes après la frappe : on attend « Brouillon enregistré »
+    avant de fermer la réponse, sinon Echap peut le faire disparaître."""
+    xp = ("//*[contains(normalize-space(text()), 'Brouillon enregistré') or "
+          "contains(normalize-space(text()), 'Draft saved') or contains(normalize-space(text()), 'Enregistré')]")
+    end = time.time() + timeout
+    while time.time() < end:
+        if visible(driver, xp):
+            return True
+        time.sleep(0.5)
+    return False
+
+
 def human_type(el, text):
     for ch in text:
         el.send_keys(Keys.ENTER if ch == "\n" else ch)

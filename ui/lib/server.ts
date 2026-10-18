@@ -32,6 +32,12 @@ export function readEntries(): Entry[] {
     .reverse();
 }
 
+export function setStatus(id: string, status: string) {
+  const data = existsSync(STATUS) ? JSON.parse(readFileSync(STATUS, "utf-8")) : {};
+  data[id] = { status, time: new Date().toISOString().slice(0, 19) };
+  writeFileSync(STATUS, JSON.stringify(data, null, 2));
+}
+
 export function readMode(): string {
   try {
     return JSON.parse(readFileSync(CONFIG, "utf-8")).mode ?? "verification";
@@ -41,10 +47,24 @@ export function readMode(): string {
 }
 
 export function writeMode(mode: string) {
-  writeFileSync(CONFIG, JSON.stringify({ mode }, null, 2));
+  let config = {};
+  try {
+    config = JSON.parse(readFileSync(CONFIG, "utf-8"));
+  } catch {}
+  writeFileSync(CONFIG, JSON.stringify({ every_minutes: 15, ...config, mode }, null, 2));
 }
 
-let token: string | null = null;
+/** Lit une valeur de training_bot/.env (où le setup range le token screenpipe). */
+function envFile(key: string): string | undefined {
+  try {
+    const m = readFileSync(path.join(ROOT, "training_bot", ".env"), "utf-8").match(new RegExp(`^${key}=(.*)$`, "m"));
+    return m?.[1].trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+let token: string | null = envFile("SCREENPIPE_LOCAL_API_KEY") ?? null;
 
 /** Token de l'API locale screenpipe, demandé une fois à sa CLI puis gardé en mémoire (jamais écrit). */
 async function screenpipeToken(): Promise<string> {

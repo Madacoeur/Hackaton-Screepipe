@@ -6,18 +6,26 @@ import tempfile
 import urllib.parse
 import urllib.request
 
+try:  # le token est rangé dans training_bot/.env (hors git) : aucun appel à la CLI, aucune fenêtre
+    from pathlib import Path
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent.parent / "training_bot" / ".env")
+except ImportError:
+    pass
+
 BASE = os.getenv("SCREENPIPE_LOCAL_API_URL", "http://localhost:3030")
 BUN = os.path.expandvars(r"%LOCALAPPDATA%\screenpipe\bun.exe")
 _token = None
 
 
 def token():
-    """Token d'API : variable d'environnement, sinon demandé à la CLI screenpipe (jamais stocké sur disque)."""
+    """Token d'API : SCREENPIPE_LOCAL_API_KEY (.env), sinon demandé une fois à la CLI screenpipe, sans console."""
     global _token
     if _token is None:
         _token = os.getenv("SCREENPIPE_LOCAL_API_KEY") or subprocess.run(
             [BUN, "x", "screenpipe@latest", "auth", "token"],
             capture_output=True, text=True, cwd=tempfile.mkdtemp(), timeout=120,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         ).stdout.strip().splitlines()[-1]
     return _token
 

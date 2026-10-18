@@ -38,11 +38,11 @@ from selenium.webdriver.support.ui import WebDriverWait  # noqa: E402
 import pyautogui  # noqa: E402
 from reply_bot import (ROW, attachment_present, click_reply, drag_file_to, focus_browser,  # noqa: E402
                        get_driver, human_type, layout_windows, open_explorer_on, open_inbox,
-                       read_open_mail, screen_center, visible)
+                       read_open_mail, screen_center, visible, wait_draft_saved)
 
 sys.path.insert(0, str(ROOT / "agent"))
-from context import fact_sentence, find_context  # noqa: E402
-from evidence import AUTO_THRESHOLD, confidence, past_evidence  # noqa: E402
+from context import AGENDA_WORDS, fact_sentence, find_context, topics_of  # noqa: E402
+from evidence import AUTO_THRESHOLD, SENSITIVE, confidence, past_evidence  # noqa: E402
 
 try:  # clé Anthropic optionnelle, dans training_bot/.env
     from dotenv import load_dotenv
@@ -197,9 +197,67 @@ def run_playbook(driver, pb, row, decide):
         box.send_keys(Keys.CONTROL, Keys.ENTER)
         time.sleep(3)
     else:
+        wait_draft_saved(driver)
         box.send_keys(Keys.ESCAPE)  # ferme la réponse ; Gmail garde le brouillon
         time.sleep(2)
     return info, reply, None
+
+
+def clean_preview(text):
+    """Aperçu stable d'une rangée Gmail (sans le badge « Nouveau » qui disparaît une fois vu)."""
+    return re.sub(r"^(Nouveau|New)\s+", "", " ".join(text.split()))[:90]
+
+
+def asks_context(text):
+    """Le mail pose une question dont la réponse peut être dans ce que l'utilisateur a vu (et il n'est pas sensible)."""
+    t = text.lower()
+    return (bool(topics_of(t)) or any(w in t for w in AGENDA_WORDS)) and not any(w in t for w in SENSITIVE)
+
+
+def run_context_reply(driver, row, base, senders):
+    """Aucun workflow appris : répond uniquement avec le contexte retrouvé dans screenpipe, sans pièce jointe.
+    Toujours en brouillon (pas de geste appris = toujours validé par l'utilisateur)."""
+    focus_browser()
+    layout_windows(driver)
+    pyautogui.moveTo(*screen_center(driver, row), duration=0.6)
+    row.click()
+    subject, body, first_name = read_open_mail(driver)
+    text = f"{subject}\n{body}"
+    if any(w in text.lower() for w in SENSITIVE):
+        return None
+    ctx = find_context(subject, body, first_name)
+    sentence = fact_sentence(ctx["facts"])
+    if not sentence:
+        driver.back()
+        return None
+    reply = claude_reply_context(first_name, subject, body, ctx["facts"]) or \
+        f"Salut {first_name},\n\n{sentence}\n\nBonne journée,\nTable En"
+    box = click_reply(driver)
+    box.click()
+    human_type(box, reply)
+    wait_draft_saved(driver)
+    box.send_keys(Keys.ESCAPE)  # brouillon
+    time.sleep(2)
+    known = (first_name or "").lower() in senders
+    score = min(70, 30 + 15 * len(ctx["facts"]) + (10 if known else 0))
+    reasons = [("+30", "pas de geste appris : réponse construite avec le contexte seul"),
+               (f"+{15 * len(ctx['facts'])}", "contexte retrouvé dans screenpipe : "
+                + ", ".join(f"{f['topic']} = {f['value']}" for f in ctx["facts"]))]
+    reasons.append(("+10", "expéditeur déjà rencontré") if known else ("+0", "expéditeur inconnu"))
+    reasons.append(("bloquant", "aucun workflow appris pour ce type de mail : toujours validé par toi"))
+    return {**base, "scenario": "contexte", "subject": subject, "sender": first_name, "body": body, "file": None,
+            "steps": ["ouvrir_mail", "chercher_contexte", "rediger_reponse"], "reply": reply, "status": "brouillon",
+            "error": None, "score": score, "reasons": reasons, "sensitive": False,
+            "evidence": {"frames": [], "observations": 0, "memory": None}, "context": ctx}
+
+
+def claude_reply_context(first_name, subject, body, facts):
+    """Variante Claude (optionnelle, ANTHROPIC_API_KEY) pour une réponse fondée uniquement sur le contexte."""
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return None
+    pb = {"exemples_de_reponse": [f"Salut {first_name},\n\n…\n\nBonne journée,\nTable En"],
+          "variables": {"fichier": "aucun"}}
+    return claude_reply(pb, first_name, subject, body, facts)
 
 
 def log_entry(entry):
@@ -226,7 +284,7 @@ def main():
     if LOG.exists():
         for line in LOG.read_text(encoding="utf-8").splitlines():
             if line.strip() and json.loads(line).get("status") == "à vérifier":
-                seen.add(json.loads(line).get("preview", ""))
+                seen.add(clean_preview(json.loads(line).get("preview", "")))
     for _ in range(args.max * 3):
         if len(done) >= args.max:
             break
@@ -237,24 +295,32 @@ def main():
             time.sleep(5)
             candidates = visible(driver, ROW)[:1]
         else:
-            candidates = [r for r in unread_rows(driver) if " ".join(r.text.split())[:90] not in seen]
+            candidates = [r for r in unread_rows(driver) if clean_preview(r.text) not in seen]
         if not candidates:
             break
         row = candidates[0]
-        preview = " ".join(row.text.split())[:90]
+        preview = clean_preview(row.text)
         seen.add(preview)
         if not preview:  # rangée Gmail en cours de redessin : on la reprendra au prochain passage
             continue
         key, margin = choose_playbook(playbooks, row.text)
         base = {"id": uuid.uuid4().hex[:12], "time": datetime.now().isoformat(timespec="seconds"), "mode": mode}
         if key is None:
+            cell = lambda css: " ".join((row.find_elements(By.CSS_SELECTOR, css) or [None])[0].text.split()) \
+                if row.find_elements(By.CSS_SELECTOR, css) else ""
+            meta = {"sender": cell(".yX"), "subject": cell(".bog"), "body": cell(".y2").lstrip("- ")}
+            # pas de geste appris, mais peut-être une question à laquelle screenpipe sait répondre (agenda, prix…)
+            if not args.dry and asks_context(preview):
+                entry = run_context_reply(driver, row, base, senders)
+                if entry:
+                    log_entry(entry)
+                    done.append(entry)
+                    print(f"[agent] {preview}\n        -> réponse par contexte (brouillon, confiance {entry['score']})")
+                    continue
             print(f"[agent] À VÉRIFIER (aucun workflow appris ne correspond) : {preview}")
             review.append(preview)
             if not args.dry:
-                cell = lambda css: " ".join((row.find_elements(By.CSS_SELECTOR, css) or [None])[0].text.split()) \
-                    if row.find_elements(By.CSS_SELECTOR, css) else ""
-                log_entry({**base, "status": "à vérifier", "preview": preview, "score": 0,
-                           "sender": cell(".yX"), "subject": cell(".bog"), "body": cell(".y2").lstrip("- "),
+                log_entry({**base, "status": "à vérifier", "preview": preview, "score": 0, **meta,
                            "reasons": [["bloquant", "aucun workflow appris ne correspond à ce mail : je ne réponds pas"]]})
             continue
         pb = playbooks[key]
