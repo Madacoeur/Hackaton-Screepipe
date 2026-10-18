@@ -30,7 +30,7 @@ It works in three steps.
 
 Let me show you. An email from Karim just arrived. I'm taking my hands off the mouse.
 
-**[Interface → “Traiter maintenant”, let the mouse work]**
+**[Interface → “Process now”, let the mouse work]**
 
 It opens the email, hits reply, opens the file explorer, grabs the right PDF, drags it into Gmail, and writes the answer — in my style.
 
